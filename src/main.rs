@@ -1,5 +1,9 @@
 mod gui;
+mod model;
+
+use crate::model::application::OptiRust;
+
 
 fn main() -> iced::Result {
-    iced::run("OptiRust", gui::update::update, gui::view::view)
+    iced::application("OptiRust", OptiRust::update, OptiRust::view).run()
 }
