@@ -1,15 +1,13 @@
 use chrono::{Days, NaiveDate};
 use core::f64;
-use std::convert::TryInto;
-use std::cmp::{min_by, max_by};
 
-#[derive(Default)]
 pub struct PriceChart {
     pub data: Vec<DataPoint>,
     pub squared_sum: f64,
     pub sum: f64,
     pub max_price: f64,
     pub min_price: f64,
+
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -40,7 +38,12 @@ impl PriceChart {
     pub fn from_prices_and_date(input_data: Vec<f64>, starting_date: NaiveDate) -> PriceChart {
         let data_points: Vec<DataPoint> = input_data
         .iter()
-        .map(|&p| DataPoint::new(p, starting_date.checked_add_days(Days::new(1)).unwrap())).collect();
+        .enumerate() // Get index and value
+        .map(|(i, &price)| {
+            let date = starting_date.checked_add_days(Days::new(i as u64)).unwrap();
+            DataPoint::new(price, date)
+        })
+        .collect();
         PriceChart::new(&data_points)
     }
  
@@ -58,5 +61,13 @@ impl PriceChart {
 
     pub fn variance(&self) -> f64 {
         self.squared_sum / (self.data.len() as f64) - (self.sum / (self.data.len() as f64)).powi(2)
+    }
+}
+
+impl Default for PriceChart {
+    fn default() -> Self {
+        PriceChart::from_prices_and_date(
+            vec!(113.0, 116.5, 137.0, 145.3, 101.32, 104.33, 120.32, 100.4), 
+            NaiveDate::from_ymd_opt(2025, 1, 3).unwrap())
     }
 }
