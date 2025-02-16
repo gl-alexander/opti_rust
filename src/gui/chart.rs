@@ -5,13 +5,14 @@ use iced::widget::canvas;
 use iced::widget::canvas::{Frame, Path, Stroke, Text, Event};
 
 pub const CHART_WIDTH: f32 = 1000f32;
-pub const CHART_HEIGHT: f32 = 600f32;
+pub const CHART_HEIGHT: f32 = 400f32;
 
 const BOUNDS_OFFSET: f32 = 50.0;
 const INNER_OFFSET: f32 = 15.0;
-const POINT_RADIUS: f32 = 5.0;
+const POINT_RADIUS_MAX: f32 = 6.0;
+const POINT_RADIUS_MIN: f32 = 2.0;
 const VERTICAL_SCALING: f32 = 1f32 / 8f32; // represents what % of the canvas we should put the highest price of the PriceChart
-// 239, 98, 108
+
 const COLOR_MAX_VAL: f32 = 255f32;
 const COLOR_WHITE: Color = Color{r: 246f32 / COLOR_MAX_VAL, g: 232f32 / COLOR_MAX_VAL, b: 234f32 / COLOR_MAX_VAL, a:1f32};
 const COLOR_BLUE: Color = Color{r: 132f32 / COLOR_MAX_VAL, g: 220f32 / COLOR_MAX_VAL, b: 207f32 / COLOR_MAX_VAL, a:1f32};
@@ -24,7 +25,7 @@ pub struct ChartDisplayState {
     pub max_viewing_price: f32,
     pub price_diff: f32,
     pub hover_index: Option<usize>,
-    pub select_index: Option<usize>,
+    pub _select_index: Option<usize>,
     pub x_labels: Vec<Text>,
     pub y_labels: Vec<Text>,
 }
@@ -38,7 +39,7 @@ impl Default for ChartDisplayState {
             max_viewing_price: 1f32, 
             price_diff: 1f32, 
             hover_index: None, 
-            select_index: None, 
+            _select_index: None, 
             x_labels: vec![Text::default(), Text::default()],
             y_labels: vec![Text::default(), Text::default()],
         };
@@ -46,7 +47,6 @@ impl Default for ChartDisplayState {
         result
     }
 }
-
 
 impl canvas::Program<Message> for PriceChart {
     type State = ChartDisplayState;
@@ -57,21 +57,16 @@ impl canvas::Program<Message> for PriceChart {
             renderer: &Renderer,
             _theme: &Theme,
             bounds: iced::Rectangle,
-            cursor: mouse::Cursor,
+            _cursor: mouse::Cursor,
         ) -> Vec<canvas::Geometry<Renderer>> {
         let mut frame = Frame::new(renderer, bounds.size());
         if !state.initialized {
             return vec![frame.into_geometry()];
         }
 
-        let drawing_bounds = Rectangle::new(
-            Point::new(INNER_OFFSET, INNER_OFFSET), 
-            Size::new(bounds.width - INNER_OFFSET - BOUNDS_OFFSET, bounds.height - INNER_OFFSET - BOUNDS_OFFSET)
-        );
-
         // Draw axes
-        let x_axis = Path::line(Point::new(BOUNDS_OFFSET, bounds.height - BOUNDS_OFFSET), Point::new(bounds.width - BOUNDS_OFFSET, bounds.height - BOUNDS_OFFSET));
-        let y_axis = Path::line(Point::new(bounds.width - BOUNDS_OFFSET, BOUNDS_OFFSET), Point::new(bounds.width - BOUNDS_OFFSET, bounds.height - BOUNDS_OFFSET));
+        let x_axis = Path::line(Point::new(INNER_OFFSET, bounds.height - BOUNDS_OFFSET), Point::new(bounds.width - BOUNDS_OFFSET, bounds.height - BOUNDS_OFFSET));
+        let y_axis = Path::line(Point::new(bounds.width - BOUNDS_OFFSET, INNER_OFFSET), Point::new(bounds.width - BOUNDS_OFFSET, bounds.height - BOUNDS_OFFSET));
         frame.stroke(&x_axis, Stroke::default().with_color(COLOR_WHITE));
         frame.stroke(&y_axis, Stroke::default().with_color(COLOR_WHITE));
 
@@ -84,8 +79,10 @@ impl canvas::Program<Message> for PriceChart {
         });
         frame.stroke(&line, Stroke::default().with_color(COLOR_BLUE));
         // Draw points
+        let radius = (9.0 / self.data.len() as f32) * (POINT_RADIUS_MAX - POINT_RADIUS_MIN) + POINT_RADIUS_MIN;
+        let clamped = radius.clamp(POINT_RADIUS_MIN, POINT_RADIUS_MAX);
         for p in &state.points {
-            let circle = canvas::Path::circle(Point::new(p.x, p.y), POINT_RADIUS);
+            let circle = canvas::Path::circle(Point::new(p.x, p.y), clamped);
             frame.fill(&circle, COLOR_RED);
         }
 
@@ -133,17 +130,16 @@ impl canvas::Program<Message> for PriceChart {
         cursor: mouse::Cursor,
     ) -> (Status, Option<Message>) {
 
-        if !state.initialized {
+        if !state.initialized || self.refresh_chart {
+            state.x_labels.clear();
+            state.y_labels.clear();
             state.update_display_points(self, bounds);
             state.initialized = true;
         }
-
         match event {
-            // Detect mouse movement (for hover effect)
             Event::Mouse(mouse::Event::CursorMoved { position }) => {
                 if let Some(pos) = cursor.position_in(bounds) {
-                    // Find closest point within a small hover radius
-                    let hover_radius = 10.0; // Adjust for sensitivity
+                    let hover_radius = 10.0; 
                     state.hover_index = state.points.iter()
                         .enumerate()
                         .filter(|(_, point)| {
@@ -152,12 +148,11 @@ impl canvas::Program<Message> for PriceChart {
                             (dx.powi(2) + dy.powi(2)).sqrt() < hover_radius
                         })
                         .map(|(index, _)| index)
-                        .next(); // Get the first close point (if any)
+                        .next(); 
                 } else {
-                    state.hover_index = None; // Reset hover if cursor is out of bounds
+                    state.hover_index = None; 
                 }
             }
-    
             _ => {}
         }
     
@@ -182,7 +177,7 @@ impl ChartDisplayState {
     
         self.points.clear();
         for (i, data_point) in price_chart.data.iter().enumerate() {
-            let x = INNER_OFFSET + (i as f32 / (price_chart.data.len() - 1) as f32) * (drawing_bounds.width - BOUNDS_OFFSET);
+            let x = INNER_OFFSET + (i as f32 / (price_chart.data.len() - 1) as f32) * (drawing_bounds.width);
             let y = (self.max_viewing_price - data_point.price as f32)
                     / self.price_diff * (drawing_bounds.height - BOUNDS_OFFSET);
             self.points.push(Point::new(x, y));
@@ -209,10 +204,11 @@ impl ChartDisplayState {
         let num_y_labels = 5;
         for i in 0..=num_y_labels {
             let price = self.min_viewing_price + (i as f32 / num_y_labels as f32) * self.price_diff;
-            let y = INNER_OFFSET + drawing_bounds.height - (i as f32 / num_y_labels as f32) * drawing_bounds.height;
+            let y = (self.max_viewing_price - price)
+                    / self.price_diff * (drawing_bounds.height - BOUNDS_OFFSET);
             let label = Text {
                 content: format!("{:.2}", price),
-                position: Point::new(bounds.width - INNER_OFFSET, y),
+                position: Point::new(bounds.width - BOUNDS_OFFSET, y),
                 color: COLOR_WHITE,
                 size: Pixels(16.0),
                 ..Text::default()

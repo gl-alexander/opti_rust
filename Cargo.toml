@@ -6,3 +6,11 @@ edition = "2021"
 [dependencies]
 iced = { version = "0.13", features = ["canvas", "tokio"] }
 chrono = "0.4.39"
+reqwest = { version = "0.11", features = ["blocking", "json"] }
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1.0", features = ["full"] }
+rand = { version = "0.9.0" }
+rand_distr = "0.5.0"
+statrs = { version = "0.18.0", features = ["rand"] }
+approx = "0.5.1"
+rayon = "1.10"
